@@ -7,6 +7,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:open_file/open_file.dart';
+import 'package:intl/intl.dart';
+
+final formatter = NumberFormat("#,##0", "fr_FR");
 
 pw.Widget _cell(String text) {
   return pw.Padding(
@@ -42,14 +45,11 @@ List<pw.TableRow> _buildGrandLivreRows(List<Map<String, dynamic>> data) {
         _cell(e['date'].toString().split('T')[0]),
         _cell(e['description'] ?? ''),
 
+        _cell(e['type'] == 'Entrant' ? formatter.format(montant) : ''),
 
-        _cell(e['type'] == 'Entrant' ? montant.toStringAsFixed(0) : ''),
+        _cell(e['type'] == 'Sortant' ? formatter.format(montant) : ''),
 
-
-        _cell(e['type'] == 'Sortant' ? montant.toStringAsFixed(0) : ''),
-
-
-        _cell(solde.toStringAsFixed(0)),
+        _cell(formatter.format(solde)),
       ],
     );
   }).toList();
@@ -85,21 +85,21 @@ class ExportService {
           pw.Table(
             border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
             columnWidths: {
-              0: const pw.FlexColumnWidth(2), 
-              1: const pw.FlexColumnWidth(4), 
-              2: const pw.FlexColumnWidth(2), 
-              3: const pw.FlexColumnWidth(2), 
-              4: const pw.FlexColumnWidth(3), 
+              0: const pw.FlexColumnWidth(2),
+              1: const pw.FlexColumnWidth(4),
+              2: const pw.FlexColumnWidth(2),
+              3: const pw.FlexColumnWidth(2),
+              4: const pw.FlexColumnWidth(3),
             },
             children: [
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                 children: [
-                  _headerCell("Date"),
+                  _headerCell("Daty"),
                   _headerCell("Antony"),
-                  _headerCell("Miditra"),
-                  _headerCell("Mivoaka"),
-                  _headerCell("Am-pelantanana"),
+                  _headerCell("Miditra (Ar)"),
+                  _headerCell("Mivoaka (Ar)"),
+                  _headerCell("Am-pelantanana (Ar)"),
                 ],
               ),
 
@@ -108,9 +108,15 @@ class ExportService {
           ),
 
           pw.SizedBox(height: 20),
-          pw.Text("Totaly Vola Miditra : $totalEntrant"),
-          pw.Text("Totaly Vola Mivoaka : $totalSortant"),
-          pw.Text("Vola am-pelantanana : ${totalEntrant - totalSortant}"),
+          pw.Text(
+            "Totaly Vola Miditra : ${formatter.format(totalEntrant)} Ariary",
+          ),
+          pw.Text(
+            "Totaly Vola Mivoaka : ${formatter.format(totalSortant)} Ariary",
+          ),
+          pw.Text(
+            "Vola am-pelantanana : ${formatter.format(totalEntrant - totalSortant)} Ariary",
+          ),
         ],
       ),
     );
@@ -123,41 +129,56 @@ class ExportService {
       var excel = Excel.createExcel();
       Sheet sheet = excel['Feuille1'];
 
+      // if (excel.sheets.containsKey('Sheet1')) {
+      //   excel.delete('Sheet1');
+      // }
+
       sheet.appendRow([
         "Daty",
         "Antony",
-        "Miditra",
-        "Mivoaka",
-        "Am-pelantanana",
+        "Miditra (Ar)",
+        "Mivoaka (Ar)",
+        "Am-pelantanana (Ar)",
       ]);
 
       double totalEntrant = 0;
       double totalSortant = 0;
 
       for (var e in data) {
-        sheet.appendRow([
-          e['date'].toString().split('T')[0],
-          e['description'],
-          e['type'] == 'Entrant',
-          e['type'] == 'Sortant',
-          e['montant'],
-        ]);
+        double montant = double.tryParse(e['montant'].toString()) ?? 0;
 
         if (e['type'] == 'Entrant') {
-          totalEntrant += e['montant'];
+          totalEntrant += montant;
         } else {
-          totalSortant += e['montant'];
+          totalSortant += montant;
         }
+
+        double solde = totalEntrant - totalSortant;
+
+        sheet.appendRow([
+          e['date'].toString().split('T')[0],
+
+          e['description'],
+
+          e['type'] == 'Entrant' ? "${formatter.format(montant)} " : "",
+
+          e['type'] == 'Sortant' ? "${formatter.format(montant)} " : "",
+
+          "${formatter.format(solde)} ",
+        ]);
       }
 
       sheet.appendRow([]);
-      sheet.appendRow(["Total Entrant", totalEntrant]);
-      sheet.appendRow(["Total Sortant", totalSortant]);
-      sheet.appendRow(["Solde", totalEntrant - totalSortant]);
+      sheet.appendRow(["Total Entrant", "${formatter.format(totalEntrant)} "]);
+      sheet.appendRow(["Total Sortant", "${formatter.format(totalSortant)} "]);
+      sheet.appendRow([
+        "Solde",
+        "${formatter.format(totalEntrant - totalSortant)} ",
+      ]);
 
       final directory = await getApplicationDocumentsDirectory();
 
-      final path = "${directory.path}/transactions.xlsx";
+      final path = "${directory.path}/TATITRA ARA-BOLA.xlsx";
 
       final bytes = excel.encode();
 
@@ -169,10 +190,8 @@ class ExportService {
         ..createSync(recursive: true)
         ..writeAsBytesSync(bytes);
 
-      // Notification
       Fluttertoast.showToast(msg: "Fichier Excel exporté avec succès");
 
-      // Ouvrir automatiquement le fichier
       await OpenFile.open(path);
 
       print("Excel exporté : $path");
