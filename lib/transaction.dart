@@ -4,7 +4,6 @@ import 'package:fjkm_kajy/components/currency.dart';
 import 'package:intl/intl.dart';
 import 'package:fjkm_kajy/services/export_service.dart';
 import 'package:fjkm_kajy/services/trasanction_service.dart';
-import 'package:fjkm_kajy/components/currency.dart';
 
 void _showExportDialog(BuildContext context) {
   DateTime? startDate;
@@ -244,6 +243,74 @@ class AllTransactionsPage extends StatefulWidget {
 class _AllTransactionsPageState extends State<AllTransactionsPage> {
   String _filterType = 'Tous';
 
+  bool _selectionMode = false;
+  List<int> _selectedIds = [];
+
+  Future<Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>>
+  _transactionFuture = Future.value({});
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTransactions();
+  }
+
+  void _refreshTransactions() {
+    _transactionFuture = _loadGroupedTransactions();
+  }
+
+  void _toggleSelection(int id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+
+        if (_selectedIds.isEmpty) {
+          _selectionMode = false;
+        }
+      } else {
+        _selectedIds.add(id);
+        _selectionMode = true;
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    for (int id in _selectedIds) {
+      await DatabaseHelper.instance.deleteOperation(id);
+    }
+
+    setState(() {
+      _selectedIds.clear();
+      _selectionMode = false;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Opérations supprimées"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAllTransactions() async {
+    await DatabaseHelper.instance.deleteAllOperations();
+
+    setState(() {
+      _refreshTransactions();
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Toutes les opérations ont été supprimées"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>>
   _loadGroupedTransactions() async {
     final List<Map<String, dynamic>> allData = await DatabaseHelper.instance
@@ -284,7 +351,17 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
   }
 
   double _total(List<Map<String, dynamic>> items) {
-    return items.fold(0.0, (sum, item) => sum + (item['montant'] ?? 0.0));
+    return items.fold(0.0, (sum, item) {
+      final montant = (item['montant'] ?? 0.0) as num;
+
+      if (item['type'] == 'Entrant') {
+        return sum + montant;
+      } else if (item['type'] == 'Sortant') {
+        return sum - montant;
+      }
+
+      return sum;
+    });
   }
 
   @override
@@ -293,28 +370,66 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
       backgroundColor: const Color(0xFFF3F6FF),
 
       appBar: AppBar(
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1A237E), Color(0xFF3949AB)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        title: const Text(
-          "Historique",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
+        backgroundColor: Colors.indigo,
+        title: Text(
+          _selectionMode
+              ? "${_selectedIds.length} sélectionné(s)"
+              : "Historique",
+          style: const TextStyle(
             color: Colors.white,
+            fontWeight: FontWeight.w900,
           ),
         ),
+
         actions: [
-          IconButton(
-            icon: const Icon(Icons.print, color: Colors.white),
-            onPressed: () => _showExportDialog(context),
+          if (_selectionMode)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.white),
+              onPressed: () async {
+                await _deleteSelected();
+              },
+            ),
+
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) async {
+              if (value == 'export') {
+                _showExportDialog(context);
+              }
+
+              if (value == 'delete_all') {
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text("Supprimer toutes les opérations"),
+                    content: const Text("Cette action est irréversible."),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Annuler"),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await _deleteAllTransactions();
+                        },
+                        child: const Text("Supprimer"),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'export', child: Text("Exporter")),
+              const PopupMenuItem(
+                value: 'delete_all',
+                child: Text("Tout supprimer"),
+              ),
+            ],
           ),
         ],
       ),
@@ -325,7 +440,7 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
 
           Expanded(
             child: FutureBuilder<Map<String, dynamic>>(
-              future: _loadGroupedTransactions(),
+              future: _transactionFuture,
 
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -357,6 +472,28 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
                       });
                     });
 
+                    final sortedMonths = months.keys.toList()
+                      ..sort((a, b) {
+                        final monthOrder = {
+                          'janvier': 1,
+                          'février': 2,
+                          'mars': 3,
+                          'avril': 4,
+                          'mai': 5,
+                          'juin': 6,
+                          'juillet': 7,
+                          'août': 8,
+                          'septembre': 9,
+                          'octobre': 10,
+                          'novembre': 11,
+                          'décembre': 12,
+                        };
+
+                        return monthOrder[b.toLowerCase()]!.compareTo(
+                          monthOrder[a.toLowerCase()]!,
+                        );
+                      });
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 20),
                       decoration: BoxDecoration(
@@ -374,32 +511,44 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
                         title: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "📅 Année $year",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.calendar_month,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "Année $year",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
+
                             const SizedBox(height: 6),
-                            // Text(
-                            //   "Total: ${formatCurrency(yearTotal)}",
-                            //   style: const TextStyle(color: Colors.white70),
-                            // ),
+
+                            Text(
+                              "Balance annuelle : ${NumberFormat('#,##0', 'fr_FR').format(yearTotal)} Ar",
+                              style: const TextStyle(color: Colors.white70),
+                            ),
                           ],
                         ),
 
-                        children: months.keys.map<Widget>((month) {
+                        children: sortedMonths.map<Widget>((month) {
                           final days = months[month] as Map<String, dynamic>;
 
-                          double monthTotal = 0;
+                          // double monthTotal = 0;
 
-                          days.forEach((_, items) {
-                            monthTotal += _total(
-                              List<Map<String, dynamic>>.from(items),
-                            );
-                          });
+                          // days.forEach((_, items) {
+                          //   monthTotal += _total(
+                          //     List<Map<String, dynamic>>.from(items),
+                          //   );
+                          // });
 
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -414,12 +563,24 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
                                 title: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      "🗓️ ${month.toUpperCase()}",
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.date_range,
+                                          size: 18,
+                                          color: Colors.black87,
+                                        ),
+                                        const SizedBox(width: 6),
+
+                                        Text(
+                                          month.toUpperCase(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
                                     ),
+
                                     // Text(
                                     //   "Total: ${NumberFormat('#,##0', 'fr_FR').format(monthTotal)}",
                                     //   style: const TextStyle(
@@ -436,15 +597,15 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
                                   );
 
                                   // double dayTotal = _total(items);
-                                  double dayTotal =
-                                      _sumItems(items, "Entrant") -
-                                              _sumItems(items, "Sortant") >
-                                          0
-                                      ? _sumItems(items, "Entrant") -
-                                            _sumItems(items, "Sortant")
-                                      : 0;
-                                  double entrant = _sumItems(items, "Entrant");
-                                  double sortant = _sumItems(items, "Sortant");
+                                  // double dayTotal =
+                                  //     _sumItems(items, "Entrant") -
+                                  //             _sumItems(items, "Sortant") >
+                                  //         0
+                                  //     ? _sumItems(items, "Entrant") -
+                                  //           _sumItems(items, "Sortant")
+                                  //     : 0;
+                                  // double entrant = _sumItems(items, "Entrant");
+                                  // double sortant = _sumItems(items, "Sortant");
 
                                   return Container(
                                     margin: const EdgeInsets.symmetric(
@@ -467,11 +628,22 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          "📌 $day",
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.push_pin,
+                                              size: 18,
+                                              color: Colors.blue,
+                                            ),
+                                            const SizedBox(width: 6),
+
+                                            Text(
+                                              day,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
                                         ),
 
                                         const SizedBox(height: 8),
@@ -480,26 +652,62 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
                                         //   mainAxisAlignment:
                                         //       MainAxisAlignment.spaceBetween,
                                         //   children: [
-                                        //     Text(
-                                        //       "💚 ${NumberFormat('#,##0', 'fr_FR').format(entrant)} Ar",
-                                        //       style: const TextStyle(
-                                        //         color: Colors.green,
-                                        //       ),
+                                        //     Row(
+                                        //       children: [
+                                        //         const Icon(
+                                        //           Icons.arrow_downward,
+                                        //           color: Colors.green,
+                                        //           size: 18,
+                                        //         ),
+                                        //         const SizedBox(width: 4),
+
+                                        //         Text(
+                                        //           "${NumberFormat('#,##0', 'fr_FR').format(entrant)} Ar",
+                                        //           style: const TextStyle(
+                                        //             color: Colors.green,
+                                        //           ),
+                                        //         ),
+                                        //       ],
                                         //     ),
-                                        //     Text(
-                                        //       "❤️ ${NumberFormat('#,##0', 'fr_FR').format(sortant)} Ar",
-                                        //       style: const TextStyle(
-                                        //         color: Colors.red,
-                                        //       ),
+
+                                        //     Row(
+                                        //       children: [
+                                        //         const Icon(
+                                        //           Icons.arrow_upward,
+                                        //           color: Colors.red,
+                                        //           size: 18,
+                                        //         ),
+                                        //         const SizedBox(width: 4),
+
+                                        //         Text(
+                                        //           "${NumberFormat('#,##0', 'fr_FR').format(sortant)} Ar",
+                                        //           style: const TextStyle(
+                                        //             color: Colors.red,
+                                        //           ),
+                                        //         ),
+                                        //       ],
                                         //     ),
-                                        //     Text(
-                                        //       "💰 ${NumberFormat('#,##0', 'fr_FR').format(dayTotal)} Ar",
-                                        //       overflow: TextOverflow.ellipsis,
-                                        //       maxLines: 1,
-                                        //       style: const TextStyle(
-                                        //         fontWeight: FontWeight.bold,
-                                        //         fontSize: 13,
-                                        //       ),
+
+                                        //     Row(
+                                        //       children: [
+                                        //         const Icon(
+                                        //           Icons.account_balance_wallet,
+                                        //           size: 18,
+                                        //           color: Colors.black87,
+                                        //         ),
+                                        //         const SizedBox(width: 4),
+
+                                        //         Text(
+                                        //           "${NumberFormat('#,##0', 'fr_FR').format(dayTotal)} Ar",
+                                        //           overflow:
+                                        //               TextOverflow.ellipsis,
+                                        //           maxLines: 1,
+                                        //           style: const TextStyle(
+                                        //             fontWeight: FontWeight.bold,
+                                        //             fontSize: 13,
+                                        //           ),
+                                        //         ),
+                                        //       ],
                                         //     ),
                                         //   ],
                                         // ),
@@ -548,7 +756,12 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
             bool isSelected = _filterType == label;
             return Expanded(
               child: GestureDetector(
-                onTap: () => setState(() => _filterType = label),
+                onTap: () {
+                  setState(() {
+                    _filterType = label;
+                    _refreshTransactions();
+                  });
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   padding: const EdgeInsets.symmetric(vertical: 10),
@@ -579,9 +792,17 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
   Widget _buildModernTile(Map<String, dynamic> item) {
     bool isExpense = item['type'] == 'Sortant';
 
+    bool isSelected = _selectedIds.contains(item['id']);
+
     return GestureDetector(
       onLongPress: () {
-        _showEditDeleteDialog(item);
+        _toggleSelection(item['id']);
+      },
+
+      onTap: () {
+        if (_selectionMode) {
+          _toggleSelection(item['id']);
+        }
       },
 
       child: Container(
@@ -589,6 +810,11 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
+
+          border: isSelected
+              ? Border.all(color: Colors.indigo, width: 2)
+              : null,
+
           gradient: LinearGradient(
             colors: isExpense
                 ? [Colors.red.shade50, Colors.red.shade100]
@@ -619,13 +845,26 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
               ),
             ),
 
-            Text(
-              "${isExpense ? '-' : '+'} ${formatCurrency(item['montant'])}",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: isExpense ? Colors.red : Colors.green,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "${isExpense ? '-' : '+'} ${NumberFormat('#,##0', 'fr_FR').format(item['montant'])} Ar",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: isExpense ? Colors.red : Colors.green,
+                  ),
+                ),
+
+                if (!_selectionMode)
+                  IconButton(
+                    icon: const Icon(Icons.more_vert),
+                    onPressed: () {
+                      _showEditDeleteDialog(item);
+                    },
+                  ),
+              ],
             ),
           ],
         ),
@@ -766,10 +1005,12 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
 
                       if (mounted) {
                         Navigator.pop(context);
-                        setState(() {});
+                        setState(() {
+                          _refreshTransactions();
+                        });
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text("✅ Ajouté !"),
+                            content: Text("Enregistrement réussi !"),
                             backgroundColor: Colors.green,
                           ),
                         );
@@ -919,26 +1160,28 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
 
                     final double? montant = double.tryParse(montantTexte);
                     if (montant != null) {
-                      await DatabaseHelper.instance.insertOperation({
+                      await DatabaseHelper.instance.updateOperation({
                         'type': selectedType,
                         'date': selectedDate.toIso8601String(),
                         'montant': montant,
                         'description': description,
-                      });
+                      }, item['id']);
 
                       if (mounted) {
                         Navigator.pop(context);
-                        setState(() {});
+                        setState(() {
+                          _refreshTransactions();
+                        });
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text("Ajouté !"),
+                            content: Text("Modification réussie !"),
                             backgroundColor: Colors.green,
                           ),
                         );
                       }
                     }
                   },
-                  child: const Text("Mettre a jour"),
+                  child: const Text("Mettre à jour"),
                 ),
               ),
             ],
@@ -987,7 +1230,9 @@ class _AllTransactionsPageState extends State<AllTransactionsPage> {
 
                       await DatabaseHelper.instance.deleteOperation(item['id']);
 
-                      setState(() {});
+                      setState(() {
+                        _refreshTransactions();
+                      });
                     },
                     child: const Text("Supprimer"),
                   ),

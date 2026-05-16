@@ -85,37 +85,13 @@ class _DashboardPageState extends State<DashboardPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6FF),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.indigo,
         elevation: 0,
         centerTitle: false,
-        title: const Padding(
-          padding: EdgeInsets.only(left: 8.0),
-          child: Text(
-            "F-KAJY",
-            style: TextStyle(
-              color: Color.fromARGB(255, 3, 31, 63),
-              fontWeight: FontWeight.w400,
-              fontSize: 20,
-            ),
-          ),
+        title: const Text(
+          "Tableau de bord",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
         ),
-        // actions: [
-        //   Padding(
-        //     padding: const EdgeInsets.only(right: 16.0),
-        //     child: GestureDetector(
-        //       onTap: () {
-        //         Navigator.push(
-        //           context,
-        //           MaterialPageRoute(builder: (_) => const SettingsPage()),
-        //         );
-        //       },
-        //       child: CircleAvatar(
-        //         backgroundColor: Colors.indigo.shade100,
-        //         child: const Icon(Icons.settings, color: Colors.indigo),
-        //       ),
-        //     ),
-        //   ),
-        // ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _getDashboardData(),
@@ -237,7 +213,7 @@ class _DashboardPageState extends State<DashboardPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "SOLDE TOTAL",
+            "SOLDE DISPONIBLE",
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 13,
@@ -245,16 +221,20 @@ class _DashboardPageState extends State<DashboardPage> {
               letterSpacing: 1,
             ),
           ),
+
           const SizedBox(height: 10),
+
           Text(
             formatCurrency(balance),
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: balance < 0 ? Colors.red : Colors.white,
               fontSize: 36,
               fontWeight: FontWeight.w900,
             ),
           ),
+
           const SizedBox(height: 20),
+
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(

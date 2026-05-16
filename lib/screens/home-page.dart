@@ -33,12 +33,12 @@ class _MainPageState extends State<MainPage> {
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
-            label: "Dashboard",
+            label: "Tableau de bord",
           ),
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long),
-            label: "Transactions",
+            label: "Opérations",
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

@@ -27,7 +27,10 @@ class SettingsPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6FF),
       appBar: AppBar(
-        title: const Text("Paramètres"),
+        title: const Text(
+          "Paramètres",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+        ),
         backgroundColor: Colors.indigo,
       ),
       body: Column(
@@ -73,7 +76,7 @@ class SettingsPage extends StatelessWidget {
               );
 
               if (confirm == true) {
-                await ImportService.importFile();
+                await ImportService.importFile(context);
               }
             },
           ),

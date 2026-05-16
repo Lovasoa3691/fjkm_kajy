@@ -78,7 +78,12 @@ class ExportService {
         theme: pw.ThemeData.withFont(base: ttf, bold: ttf),
         pageFormat: PdfPageFormat.a4,
         build: (context) => [
-          pw.Text("TATITRA ARA-BOLA", style: pw.TextStyle(fontSize: 20)),
+          pw.Center(
+            child: pw.Text(
+              "TATITRA ARA-BOLA",
+              style: pw.TextStyle(fontSize: 20),
+            ),
+          ),
 
           pw.SizedBox(height: 20),
 
@@ -169,16 +174,23 @@ class ExportService {
       }
 
       sheet.appendRow([]);
-      sheet.appendRow(["Total Entrant", "${formatter.format(totalEntrant)} "]);
-      sheet.appendRow(["Total Sortant", "${formatter.format(totalSortant)} "]);
       sheet.appendRow([
-        "Solde",
+        "Totalin'ny vola miditra",
+        "${formatter.format(totalEntrant)} ",
+      ]);
+      sheet.appendRow([
+        "Totalin'ny vola mivoaka",
+        "${formatter.format(totalSortant)} ",
+      ]);
+      sheet.appendRow([
+        "Vola am-pelantanana",
         "${formatter.format(totalEntrant - totalSortant)} ",
       ]);
 
       final directory = await getApplicationDocumentsDirectory();
 
-      final path = "${directory.path}/TATITRA ARA-BOLA.xlsx";
+      final path =
+          "${directory.path}/TATITRA ARA-BOLA ${DateTime.now().toString()}.xlsx";
 
       final bytes = excel.encode();
 

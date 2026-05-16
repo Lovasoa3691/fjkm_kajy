@@ -57,6 +57,11 @@ class DatabaseHelper {
     return await db.delete('trasanctions', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<int> deleteAllOperations() async {
+    final db = await database;
+    return await db.delete('trasanctions');
+  }
+
   Future<double> getTotalRevenus() async {
     final db = await instance.database;
     final result = await db.rawQuery(
