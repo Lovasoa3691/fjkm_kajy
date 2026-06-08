@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:open_file/open_file.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 final formatter = NumberFormat("#,##0", "fr_FR");
 
@@ -176,21 +177,29 @@ class ExportService {
       sheet.appendRow([]);
       sheet.appendRow([
         "Totalin'ny vola miditra",
-        "${formatter.format(totalEntrant)} ",
+        "${formatter.format(totalEntrant)} Ariary",
       ]);
       sheet.appendRow([
         "Totalin'ny vola mivoaka",
-        "${formatter.format(totalSortant)} ",
+        "${formatter.format(totalSortant)} Ariary",
       ]);
       sheet.appendRow([
         "Vola am-pelantanana",
-        "${formatter.format(totalEntrant - totalSortant)} ",
+        "${formatter.format(totalEntrant - totalSortant)} Ariary",
       ]);
 
-      final directory = await getApplicationDocumentsDirectory();
+      await Permission.storage.request();
 
-      final path =
-          "${directory.path}/TATITRA ARA-BOLA ${DateTime.now().toString()}.xlsx";
+      final directory = Directory("/storage/emulated/0/Documents");
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      final fileName =
+          "TATITRA_ARA_BOLA_${DateTime.now().millisecondsSinceEpoch}.xlsx";
+
+      final path = "${directory.path}/$fileName";
 
       final bytes = excel.encode();
 
@@ -198,15 +207,15 @@ class ExportService {
         throw Exception("Erreur génération fichier");
       }
 
-      final file = File(path)
-        ..createSync(recursive: true)
-        ..writeAsBytesSync(bytes);
+      final file = File(path);
 
-      Fluttertoast.showToast(msg: "Fichier Excel exporté avec succès");
+      await file.writeAsBytes(bytes);
+
+      Fluttertoast.showToast(msg: "Fichier exporté dans Documents");
 
       await OpenFile.open(path);
 
-      print("Excel exporté : $path");
+      print("Chemin : $path");
     } catch (e) {
       print("Erreur export Excel : $e");
     }
